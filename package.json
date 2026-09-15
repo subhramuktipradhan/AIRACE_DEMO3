@@ -1,0 +1,15 @@
+{
+  "name": "gnss-api",
+  "version": "1.0.0",
+  "description": "GNSS device and coordinate management REST API",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node --watch app.js"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "bcryptjs": "^3.0.2"
+  }
+}
