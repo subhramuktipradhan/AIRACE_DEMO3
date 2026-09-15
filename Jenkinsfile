@@ -35,7 +35,22 @@ pipeline {
 
         stage('Push Docker Image') {
             steps {
-                echo 'Docker Hub push will be configured after Docker Hub repository and Jenkins credentials are created.'
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+
+                    bat 'echo %DOCKER_PASSWORD%| docker login -u %DOCKER_USERNAME% --password-stdin'
+
+                    bat 'docker tag gnss-api:latest %DOCKER_USERNAME%/airacedemo3:latest'
+
+                    bat 'docker push %DOCKER_USERNAME%/airacedemo3:latest'
+
+                    bat 'docker logout'
+                }
             }
         }
     }
