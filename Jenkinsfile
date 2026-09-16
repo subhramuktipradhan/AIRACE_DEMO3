@@ -36,7 +36,7 @@ pipeline {
         stage('Check Docker Environment') {
             steps {
                 bat 'docker info'
-                bat 'set | findstr /I "PROXY"'
+                bat 'set | findstr /I "PROXY" || exit /b 0'
             }
         }
 
