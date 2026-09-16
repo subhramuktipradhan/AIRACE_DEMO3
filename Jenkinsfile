@@ -33,6 +33,13 @@ pipeline {
             }
         }
 
+        stage('Check Docker Environment') {
+            steps {
+                bat 'docker info'
+                bat 'set | findstr /I "PROXY"'
+            }
+        }
+
         stage('Push Docker Image') {
             steps {
                 withCredentials([
