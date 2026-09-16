@@ -29,7 +29,8 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                bat 'docker build -t gnss-api:latest .'
+                bat 'docker build --network=host -t gnss-api:latest .'
+                
             }
         }
 
