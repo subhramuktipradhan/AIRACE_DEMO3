@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -11,33 +12,25 @@ pipeline {
 
         stage('Install Dependencies') {
             steps {
-                bat 'npm install'
+                sh 'npm install'
             }
         }
 
         stage('Test') {
             steps {
-                bat 'npm test --if-present'
+                sh 'npm test --if-present'
             }
         }
 
         stage('Build Application') {
             steps {
-                bat 'npm run build --if-present'
+                sh 'npm run build --if-present'
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                bat 'docker build --network=host -t gnss-api:latest .'
-                
-            }
-        }
-
-        stage('Check Docker Environment') {
-            steps {
-                bat 'docker info'
-                bat 'set | findstr /I "PROXY" || exit /b 0'
+                sh 'docker build -t subhramukti/subhramukti-airacedemo-azure:latest .'
             }
         }
 
@@ -45,21 +38,34 @@ pipeline {
             steps {
                 withCredentials([
                     usernamePassword(
-                        credentialsId: 'subhramukti',
+                        credentialsId: 'dockerhub-credentials',
                         usernameVariable: 'DOCKER_USERNAME',
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
 
-                    bat 'echo %DOCKER_PASSWORD%| docker login -u %DOCKER_USERNAME% --password-stdin'
+                    sh 'echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin'
 
-                    bat 'docker tag gnss-api:latest %DOCKER_USERNAME%/airacedemo3:latest'
+                    sh 'docker push subhramukti/subhramukti-airacedemo-azure:latest'
 
-                    bat 'docker push %DOCKER_USERNAME%/airacedemo3:latest'
-
-                    bat 'docker logout'
+                    sh 'docker logout'
                 }
             }
         }
     }
+
+    post {
+        success {
+            echo 'Pipeline completed successfully. Docker image pushed to Docker Hub.'
+        }
+
+        failure {
+            echo 'Pipeline failed. Please check the Jenkins console output.'
+        }
+
+        always {
+            echo 'Pipeline execution completed.'
+        }
+    }
 }
+```
