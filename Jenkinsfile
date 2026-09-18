@@ -108,6 +108,8 @@ pipeline {
                         # Deploy application to AKS
                         kubectl apply -f k8s/deployment.yaml
 
+                        kubectl rollout restart deployment/airace-demo
+
 
                         # Create/update Kubernetes Service
                         kubectl apply -f k8s/service.yaml
