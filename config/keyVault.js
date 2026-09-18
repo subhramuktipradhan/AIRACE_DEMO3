@@ -10,7 +10,7 @@ const client = new SecretClient(keyVaultUrl, credential);
 async function getDatabaseSecrets() {
     const username = await client.getSecret("mysql-username");
     const password = await client.getSecret("mysql-password");
-    const database = await client.getSecret("mysql-database");
+    const database = await client.getSecret("Database-name");
 
     return {
         username: username.value,
