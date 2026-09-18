@@ -123,6 +123,7 @@ pipeline {
                     kubectl get pods
                     kubectl get services
                     kubectl get endpoints airace-demo-service
+                    kubectl logs deployment/airace-demo --tail=50
                 '''
             }
         }
