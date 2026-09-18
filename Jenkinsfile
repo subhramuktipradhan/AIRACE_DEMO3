@@ -2,7 +2,7 @@ pipeline {
     agent any
 
     environment {
-        AZURE_SUBSCRIPTION_ID = 'YOUR_SUBSCRIPTION_ID'
+        AZURE_SUBSCRIPTION_ID = '59260725-a3d3-4d63-aaf7-4c2c97fce963'
         RESOURCE_GROUP = 'gnss-demo-rg'
         AKS_NAME = 'airace-cluster'
     }
