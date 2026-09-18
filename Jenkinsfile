@@ -63,7 +63,7 @@ pipeline {
 
 
         // =====================================================
-        // IMPORTANT: MAIN DEPLOYMENT PART — PLEASE FOCUS HERE
+        // DEPLOYMENT TO AKS
         // =====================================================
 
         stage('Azure Login and Deploy to AKS') {
@@ -100,8 +100,14 @@ pipeline {
                           --name "$AKS_NAME" \
                           --overwrite-existing
 
+
+                        # Create/update Kubernetes ServiceAccount
+                        kubectl apply -f k8s/serviceaccount.yaml
+
+
                         # Deploy application to AKS
                         kubectl apply -f k8s/deployment.yaml
+
 
                         # Create/update Kubernetes Service
                         kubectl apply -f k8s/service.yaml
@@ -120,6 +126,7 @@ pipeline {
             }
         }
     }
+
 
     post {
 

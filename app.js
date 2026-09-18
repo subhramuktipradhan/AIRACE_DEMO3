@@ -4,6 +4,9 @@ const authRoutes = require("./routes/auth");
 const deviceRoutes = require("./routes/devices");
 const coordinateRoutes = require("./routes/coordinates");
 
+// Import database connection
+const { connectDatabase } = require("./config/database");
+
 const app = express();
 
 const PORT = 3000;
@@ -36,7 +39,22 @@ app.use((req, res) => {
 });
 
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`GNSS API running on http://localhost:${PORT}`);
-});
+// Start application
+async function startServer() {
+    try {
+
+        // Connect to Azure MySQL
+        await connectDatabase();
+
+        // Start API server only after database connection succeeds
+        app.listen(PORT, () => {
+            console.log(`GNSS API running on port ${PORT}`);
+        });
+
+    } catch (error) {
+        console.error("Application startup failed:", error.message);
+        process.exit(1);
+    }
+}
+
+startServer();

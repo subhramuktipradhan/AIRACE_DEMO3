@@ -1,25 +1,28 @@
 const mysql = require("mysql2/promise");
+const { getDatabaseSecrets } = require("./keyVault");
 
-const connectDatabase = async () => {
+async function connectDatabase() {
     try {
+        const secrets = await getDatabaseSecrets();
+
         const connection = await mysql.createConnection({
-            host: process.env.DB_HOST,
-            user: process.env.DB_USER,
-            password: process.env.DB_PASSWORD,
-            database: process.env.DB_NAME,
-            port: 3306,
+            host: "airace-vm-database.mysql.database.azure.com",
+            user: secrets.username,
+            password: secrets.password,
+            database: secrets.database,
             ssl: {
                 rejectUnauthorized: true
             }
         });
 
-        console.log("MySQL database connected successfully.");
+        console.log("Connected to Azure MySQL successfully");
 
         return connection;
+
     } catch (error) {
-        console.error("MySQL connection failed:", error.message);
+        console.error("Database connection failed:", error.message);
         throw error;
     }
-};
+}
 
-module.exports = connectDatabase;
+module.exports = { connectDatabase };

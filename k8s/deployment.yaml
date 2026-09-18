@@ -15,8 +15,11 @@ spec:
     metadata:
       labels:
         app: airace-demo
+        azure.workload.identity/use: "true"
 
     spec:
+      serviceAccountName: airace-demo-sa
+
       containers:
         - name: airace-demo
           image: subhramukti/subhramukti-airacedemo-azure:latest
