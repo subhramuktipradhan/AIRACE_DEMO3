@@ -1,0 +1,25 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: airace-demo
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: airace-demo
+
+  template:
+    metadata:
+      labels:
+        app: airace-demo
+
+    spec:
+      containers:
+        - name: airace-demo
+          image: subhramukti/subhramukti-airacedemo-azure:latest
+
+          ports:
+            - containerPort: 3000

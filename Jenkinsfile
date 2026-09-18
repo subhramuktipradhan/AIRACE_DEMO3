@@ -61,7 +61,12 @@ pipeline {
             }
         }
 
-        stage('Azure Login') {
+
+        // =====================================================
+        // IMPORTANT: MAIN DEPLOYMENT PART — PLEASE FOCUS HERE
+        // =====================================================
+
+        stage('Azure Login and Deploy to AKS') {
             steps {
                 withCredentials([
                     string(
@@ -77,23 +82,49 @@ pipeline {
                         variable: 'AZURE_TENANT_ID'
                     )
                 ]) {
+
                     sh '''
+                        # Login to Azure
                         az login --service-principal \
                           --username "$AZURE_CLIENT_ID" \
                           --password "$AZURE_CLIENT_SECRET" \
                           --tenant "$AZURE_TENANT_ID"
 
+                        # Select Azure subscription
                         az account set \
                           --subscription "$AZURE_SUBSCRIPTION_ID"
+
+                        # Connect kubectl to AKS
+                        az aks get-credentials \
+                          --resource-group "$RESOURCE_GROUP" \
+                          --name "$AKS_NAME" \
+                          --overwrite-existing
+
+                        # Deploy application to AKS
+                        kubectl apply -f k8s/deployment.yaml
+
+                        # Create/update Kubernetes Service
+                        kubectl apply -f k8s/service.yaml
                     '''
                 }
+            }
+        }
+
+
+        stage('Verify AKS Deployment') {
+            steps {
+                sh '''
+                    kubectl get pods
+                    kubectl get services
+                '''
             }
         }
     }
 
     post {
+
         success {
-            echo 'Pipeline completed successfully. Docker image pushed and Azure authentication successful.'
+            echo 'Pipeline completed successfully. Application deployed to AKS.'
         }
 
         failure {
