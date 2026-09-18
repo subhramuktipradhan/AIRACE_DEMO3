@@ -122,6 +122,7 @@ pipeline {
                 sh '''
                     kubectl get pods
                     kubectl get services
+                    kubectl get endpoints airace-demo-service
                 '''
             }
         }
