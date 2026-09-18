@@ -1,6 +1,11 @@
-
 pipeline {
     agent any
+
+    environment {
+        AZURE_SUBSCRIPTION_ID = 'YOUR_SUBSCRIPTION_ID'
+        RESOURCE_GROUP = 'gnss-demo-rg'
+        AKS_NAME = 'airace-cluster'
+    }
 
     stages {
 
@@ -43,12 +48,44 @@ pipeline {
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
+                    sh '''
+                        echo "$DOCKER_PASSWORD" | docker login \
+                          -u "$DOCKER_USERNAME" \
+                          --password-stdin
 
-                    sh 'echo "$DOCKER_PASSWORD" | docker login -u "$DOCKER_USERNAME" --password-stdin'
+                        docker push subhramukti/subhramukti-airacedemo-azure:latest
 
-                    sh 'docker push subhramukti/subhramukti-airacedemo-azure:latest'
+                        docker logout
+                    '''
+                }
+            }
+        }
 
-                    sh 'docker logout'
+        stage('Azure Login') {
+            steps {
+                withCredentials([
+                    string(
+                        credentialsId: 'AZURE_CLIENT_ID',
+                        variable: 'AZURE_CLIENT_ID'
+                    ),
+                    string(
+                        credentialsId: 'AZURE_CLIENT_SECRET',
+                        variable: 'AZURE_CLIENT_SECRET'
+                    ),
+                    string(
+                        credentialsId: 'AZURE_TENANT_ID',
+                        variable: 'AZURE_TENANT_ID'
+                    )
+                ]) {
+                    sh '''
+                        az login --service-principal \
+                          --username "$AZURE_CLIENT_ID" \
+                          --password "$AZURE_CLIENT_SECRET" \
+                          --tenant "$AZURE_TENANT_ID"
+
+                        az account set \
+                          --subscription "$AZURE_SUBSCRIPTION_ID"
+                    '''
                 }
             }
         }
@@ -56,7 +93,7 @@ pipeline {
 
     post {
         success {
-            echo 'Pipeline completed successfully. Docker image pushed to Docker Hub.'
+            echo 'Pipeline completed successfully. Docker image pushed and Azure authentication successful.'
         }
 
         failure {
@@ -68,4 +105,3 @@ pipeline {
         }
     }
 }
-
