@@ -1,3 +1,4 @@
+
 const mysql = require("mysql2/promise");
 const { getDatabaseSecrets } = require("./keyVault");
 

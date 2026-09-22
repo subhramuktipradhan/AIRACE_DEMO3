@@ -1,3 +1,4 @@
+
 pipeline {
     agent any
 
@@ -48,6 +49,7 @@ pipeline {
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
+
                     sh '''
                         echo "$DOCKER_PASSWORD" | docker login \
                           -u "$DOCKER_USERNAME" \
@@ -100,30 +102,39 @@ pipeline {
                           --name "$AKS_NAME" \
                           --overwrite-existing
 
-
                         # Create/update Kubernetes ServiceAccount
                         kubectl apply -f k8s/serviceaccount.yaml
-
 
                         # Deploy application to AKS
                         kubectl apply -f k8s/deployment.yaml
 
+                        # Restart Pods to pull the latest image
                         kubectl rollout restart deployment/airace-demo
 
+                        # Wait for deployment to complete
+                        kubectl rollout status deployment/airace-demo --timeout=180s
 
                         # Create/update Kubernetes Service
                         kubectl apply -f k8s/service.yaml
+
+                        # Create/update Horizontal Pod Autoscaler
+                        kubectl apply -f k8s/hpa.yaml
                     '''
                 }
             }
         }
 
 
+        // =====================================================
+        // VERIFY AKS DEPLOYMENT
+        // =====================================================
+
         stage('Verify AKS Deployment') {
             steps {
                 sh '''
                     kubectl get pods
                     kubectl get services
+                    kubectl get hpa
                     kubectl get endpoints airace-demo-service
                     kubectl logs deployment/airace-demo --tail=50
                 '''
@@ -132,6 +143,10 @@ pipeline {
     }
 
 
+    // =====================================================
+    // EMAIL NOTIFICATION
+    // =====================================================
+
     post {
 
         success {
@@ -139,7 +154,28 @@ pipeline {
         }
 
         failure {
-            echo 'Pipeline failed. Please check the Jenkins console output.'
+            echo 'Pipeline failed. Sending email notification.'
+
+            emailext(
+                to: 'subhramuktipradhan@gmail.com',
+
+                subject: "Jenkins Pipeline FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+
+                body: """
+AIRACE_DEMO3 Jenkins Pipeline Failed.
+
+Job Name: ${env.JOB_NAME}
+
+Build Number: ${env.BUILD_NUMBER}
+
+Build Status: ${currentBuild.currentResult}
+
+Build URL: ${env.BUILD_URL}
+
+Please check the Jenkins console output
+to identify the cause of the failure.
+"""
+            )
         }
 
         always {
