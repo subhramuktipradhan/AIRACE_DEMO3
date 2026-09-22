@@ -1,3 +1,4 @@
+
 const express = require("express");
 
 const authRoutes = require("./routes/auth");
@@ -6,6 +7,11 @@ const coordinateRoutes = require("./routes/coordinates");
 
 // Import database connection
 const { connectDatabase } = require("./config/database");
+
+// Import Redis secret-refresh listener
+const {
+    startSecretRefreshListener
+} = require("./config/secretRefresh");
 
 const app = express();
 
@@ -46,13 +52,26 @@ async function startServer() {
         // Connect to Azure MySQL
         await connectDatabase();
 
-        // Start API server only after database connection succeeds
+        // Start the GNSS API server
         app.listen(PORT, () => {
             console.log(`GNSS API running on port ${PORT}`);
         });
 
+        // Start listening for Redis notifications
+        startSecretRefreshListener().catch(error => {
+            console.error(
+                "Redis secret listener failed:",
+                error.message
+            );
+        });
+
     } catch (error) {
-        console.error("Application startup failed:", error.message);
+
+        console.error(
+            "Application startup failed:",
+            error.message
+        );
+
         process.exit(1);
     }
 }

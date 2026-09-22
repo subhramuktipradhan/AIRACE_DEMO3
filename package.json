@@ -10,9 +10,12 @@
   "dependencies": {
     "@azure/identity": "^4.13.3",
     "@azure/keyvault-secrets": "^4.11.2",
+    "@redis/client": "^6.2.1",
+    "@redis/entraid": "^6.2.1",
     "bcryptjs": "^3.0.2",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
-    "mysql2": "^3.24.4"
+    "mysql2": "^3.24.4",
+    "redis": "^6.2.1"
   }
 }

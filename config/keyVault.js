@@ -1,3 +1,4 @@
+
 const { DefaultAzureCredential } = require("@azure/identity");
 const { SecretClient } = require("@azure/keyvault-secrets");
 
@@ -7,16 +8,31 @@ const credential = new DefaultAzureCredential();
 
 const client = new SecretClient(keyVaultUrl, credential);
 
+// Retrieve the latest value of any permitted secret
+async function getSecret(secretName) {
+
+    const secret = await client.getSecret(secretName);
+
+    return secret.value;
+}
+
+// Retrieve all database credentials
 async function getDatabaseSecrets() {
-    const username = await client.getSecret("mysql-username");
-    const password = await client.getSecret("mysql-password");
-    const database = await client.getSecret("Database-name");
+
+    const username = await getSecret("mysql-username");
+
+    const password = await getSecret("mysql-password");
+
+    const database = await getSecret("Database-name");
 
     return {
-        username: username.value,
-        password: password.value,
-        database: database.value
+        username,
+        password,
+        database
     };
 }
 
-module.exports = { getDatabaseSecrets };
+module.exports = {
+    getSecret,
+    getDatabaseSecrets
+};
