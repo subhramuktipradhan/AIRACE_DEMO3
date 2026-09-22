@@ -115,7 +115,7 @@ pipeline {
                         kubectl rollout status deployment/airace-demo --timeout=180s
 
                         # Create/update Kubernetes Service
-                        kubectl apply -f k8s/service.yaml
+                        kubectl apply -f k8s/service.yam
 
                         # Create/update Horizontal Pod Autoscaler
                         kubectl apply -f k8s/hpa.yaml
