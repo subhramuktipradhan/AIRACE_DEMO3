@@ -105,6 +105,8 @@ pipeline {
                         # Create/update Kubernetes ServiceAccount
                         kubectl apply -f k8s/serviceaccount.yaml
 
+                        kubectl apply -f k8s/headless-service.yaml
+
                         # Deploy application to AKS
                         kubectl apply -f k8s/deployment.yaml
 
