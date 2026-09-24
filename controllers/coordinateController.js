@@ -1,18 +1,34 @@
-const coordinates = [];
+
+const { getPool } = require("../config/database");
 
 
-// ---------------------------------------------
-// Validate coordinate
-// ---------------------------------------------
+// =====================================================
+// VALIDATE COORDINATE
+// =====================================================
+
 function validateCoordinate(latitude, longitude) {
 
     if (
         latitude === undefined ||
-        longitude === undefined
+        longitude === undefined ||
+        latitude === null ||
+        longitude === null
     ) {
         return {
             valid: false,
             message: "Latitude and longitude are required"
+        };
+    }
+
+    if (
+        typeof latitude !== "number" ||
+        typeof longitude !== "number" ||
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude)
+    ) {
+        return {
+            valid: false,
+            message: "Latitude and longitude must be valid numbers"
         };
     }
 
@@ -36,10 +52,11 @@ function validateCoordinate(latitude, longitude) {
 }
 
 
-// ---------------------------------------------
-// WRITE coordinate
-// ---------------------------------------------
-const writeCoordinate = (req, res) => {
+// =====================================================
+// SAVE COORDINATE TO MYSQL
+// =====================================================
+
+async function saveCoordinate(data) {
 
     const {
         device_id,
@@ -47,7 +64,7 @@ const writeCoordinate = (req, res) => {
         longitude,
         altitude,
         timestamp
-    } = req.body;
+    } = data;
 
     const validation = validateCoordinate(
         latitude,
@@ -55,78 +72,273 @@ const writeCoordinate = (req, res) => {
     );
 
     if (!validation.valid) {
-        return res.status(400).json({
+        return {
             success: false,
             message: validation.message
-        });
+        };
     }
 
-    if (!device_id) {
-        return res.status(400).json({
+    if (
+        typeof device_id !== "string" ||
+        !device_id.trim() ||
+        device_id.length > 100
+    ) {
+        return {
             success: false,
-            message: "device_id is required"
-        });
+            message: "A valid device_id is required"
+        };
     }
 
-    const coordinate = {
-        id: coordinates.length + 1,
-        device_id,
-        latitude,
-        longitude,
-        altitude: altitude ?? null,
-        timestamp: timestamp || new Date().toISOString()
-    };
+    if (
+        altitude !== undefined &&
+        altitude !== null &&
+        (
+            typeof altitude !== "number" ||
+            !Number.isFinite(altitude)
+        )
+    ) {
+        return {
+            success: false,
+            message: "Altitude must be a valid number"
+        };
+    }
 
-    coordinates.push(coordinate);
+    // Convert the timestamp to MySQL DATETIME format.
+    // Store the timestamp in UTC.
 
-    res.status(201).json({
-        success: true,
-        operation: "WRITE",
-        message: "Coordinate stored successfully",
-        data: coordinate
-    });
-};
+    let mysqlTimestamp;
+
+    if (timestamp !== undefined && timestamp !== null) {
+
+        if (
+            typeof timestamp !== "string" ||
+            !timestamp.trim()
+        ) {
+            return {
+                success: false,
+                message: "Invalid timestamp"
+            };
+        }
+
+        const date = new Date(timestamp);
+
+        if (Number.isNaN(date.getTime())) {
+            return {
+                success: false,
+                message: "Invalid timestamp"
+            };
+        }
+
+        mysqlTimestamp = date
+            .toISOString()
+            .slice(0, 19)
+            .replace("T", " ");
+
+    } else {
+
+        mysqlTimestamp = new Date()
+            .toISOString()
+            .slice(0, 19)
+            .replace("T", " ");
+    }
 
 
-// ---------------------------------------------
-// READ all coordinates
-// ---------------------------------------------
-const getCoordinates = (req, res) => {
+    // Get the current MySQL connection pool.
 
-    res.json({
-        success: true,
-        operation: "READ",
-        count: coordinates.length,
-        data: coordinates
-    });
-};
+    const pool = getPool();
 
 
-// ---------------------------------------------
-// READ coordinates for device
-// ---------------------------------------------
-const getDeviceCoordinates = (req, res) => {
+    // Insert coordinate into Azure MySQL.
 
-    const deviceId = req.params.deviceId;
+    const insertQuery = `
+        INSERT INTO coordinates
+        (
+            device_id,
+            latitude,
+            longitude,
+            altitude,
+            timestamp
+        )
+        VALUES (?, ?, ?, ?, ?)
+    `;
 
-    const result = coordinates.filter(
-        coordinate =>
-            coordinate.device_id === deviceId
+    const [result] = await pool.execute(
+        insertQuery,
+        [
+            device_id,
+            latitude,
+            longitude,
+            altitude ?? null,
+            mysqlTimestamp
+        ]
     );
 
-    res.json({
+
+    // Retrieve the newly inserted record.
+
+    const [rows] = await pool.execute(
+        `
+        SELECT
+            id,
+            device_id,
+            latitude,
+            longitude,
+            altitude,
+            timestamp
+        FROM coordinates
+        WHERE id = ?
+        `,
+        [result.insertId]
+    );
+
+
+    return {
         success: true,
-        operation: "READ",
-        device_id: deviceId,
-        count: result.length,
-        data: result
-    });
+        coordinate: rows[0]
+    };
+}
+
+
+// =====================================================
+// WRITE COORDINATE
+// =====================================================
+
+const writeCoordinate = async (req, res) => {
+
+    try {
+
+        const result = await saveCoordinate(req.body);
+
+        if (!result.success) {
+            return res.status(400).json({
+                success: false,
+                message: result.message
+            });
+        }
+
+        return res.status(201).json({
+            success: true,
+            operation: "WRITE",
+            message: "Coordinate stored successfully in MySQL",
+            data: result.coordinate
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Coordinate insertion failed:",
+            error.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to store coordinate"
+        });
+    }
 };
 
 
-// ---------------------------------------------
-// EVALUATE coordinate
-// ---------------------------------------------
+// =====================================================
+// READ ALL COORDINATES
+// =====================================================
+
+const getCoordinates = async (req, res) => {
+
+    try {
+
+        const pool = getPool();
+
+        const [rows] = await pool.execute(
+            `
+            SELECT
+                id,
+                device_id,
+                latitude,
+                longitude,
+                altitude,
+                timestamp
+            FROM coordinates
+            ORDER BY id DESC
+            `
+        );
+
+        return res.json({
+            success: true,
+            operation: "READ",
+            count: rows.length,
+            data: rows
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Failed to retrieve coordinates:",
+            error.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve coordinates"
+        });
+    }
+};
+
+
+// =====================================================
+// READ COORDINATES FOR A SPECIFIC DEVICE
+// =====================================================
+
+const getDeviceCoordinates = async (req, res) => {
+
+    try {
+
+        const deviceId = req.params.deviceId;
+
+        const pool = getPool();
+
+        const [rows] = await pool.execute(
+            `
+            SELECT
+                id,
+                device_id,
+                latitude,
+                longitude,
+                altitude,
+                timestamp
+            FROM coordinates
+            WHERE device_id = ?
+            ORDER BY id DESC
+            `,
+            [deviceId]
+        );
+
+        return res.json({
+            success: true,
+            operation: "READ",
+            device_id: deviceId,
+            count: rows.length,
+            data: rows
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Failed to retrieve device coordinates:",
+            error.message
+        );
+
+        return res.status(500).json({
+            success: false,
+            message: "Failed to retrieve device coordinates"
+        });
+    }
+};
+
+
+// =====================================================
+// EVALUATE COORDINATE
+// =====================================================
+
 const evaluateCoordinate = (req, res) => {
 
     const {
@@ -140,7 +352,7 @@ const evaluateCoordinate = (req, res) => {
         longitude
     );
 
-    res.json({
+    return res.json({
         success: true,
         operation: "EVALUATE",
         result: {
@@ -156,61 +368,53 @@ const evaluateCoordinate = (req, res) => {
 };
 
 
-// ---------------------------------------------
-// EVALUATE + WRITE
-// ---------------------------------------------
-const processCoordinate = (req, res) => {
+// =====================================================
+// EVALUATE AND WRITE COORDINATE
+// =====================================================
 
-    const {
-        device_id,
-        latitude,
-        longitude,
-        altitude,
-        timestamp
-    } = req.body;
+const processCoordinate = async (req, res) => {
 
-    const validation = validateCoordinate(
-        latitude,
-        longitude
-    );
+    try {
 
-    if (!validation.valid) {
-        return res.status(400).json({
+        const result = await saveCoordinate(req.body);
+
+        if (!result.success) {
+            return res.status(400).json({
+                success: false,
+                operation: "EVALUATE + WRITE",
+                message: result.message,
+                stored: false
+            });
+        }
+
+        return res.status(201).json({
+            success: true,
+            operation: "EVALUATE + WRITE",
+            message: "Coordinate evaluated and stored successfully in MySQL",
+            stored: true,
+            data: result.coordinate
+        });
+
+    } catch (error) {
+
+        console.error(
+            "Coordinate processing failed:",
+            error.message
+        );
+
+        return res.status(500).json({
             success: false,
             operation: "EVALUATE + WRITE",
-            message: validation.message,
+            message: "Failed to process coordinate",
             stored: false
         });
     }
-
-    if (!device_id) {
-        return res.status(400).json({
-            success: false,
-            message: "device_id is required",
-            stored: false
-        });
-    }
-
-    const coordinate = {
-        id: coordinates.length + 1,
-        device_id,
-        latitude,
-        longitude,
-        altitude: altitude ?? null,
-        timestamp: timestamp || new Date().toISOString()
-    };
-
-    coordinates.push(coordinate);
-
-    res.status(201).json({
-        success: true,
-        operation: "EVALUATE + WRITE",
-        message: "Coordinate evaluated and stored successfully",
-        stored: true,
-        data: coordinate
-    });
 };
 
+
+// =====================================================
+// EXPORT CONTROLLER FUNCTIONS
+// =====================================================
 
 module.exports = {
     writeCoordinate,
