@@ -9,18 +9,6 @@ const { getPool } = require("../config/database");
 function validateCoordinate(latitude, longitude) {
 
     if (
-        latitude === undefined ||
-        longitude === undefined ||
-        latitude === null ||
-        longitude === null
-    ) {
-        return {
-            valid: false,
-            message: "Latitude and longitude are required"
-        };
-    }
-
-    if (
         typeof latitude !== "number" ||
         typeof longitude !== "number" ||
         !Number.isFinite(latitude) ||
@@ -46,9 +34,7 @@ function validateCoordinate(latitude, longitude) {
         };
     }
 
-    return {
-        valid: true
-    };
+    return { valid: true };
 }
 
 
@@ -103,26 +89,17 @@ async function saveCoordinate(data) {
         };
     }
 
-    // Convert the timestamp to MySQL DATETIME format.
-    // Store the timestamp in UTC.
-
     let mysqlTimestamp;
 
     if (timestamp !== undefined && timestamp !== null) {
 
-        if (
-            typeof timestamp !== "string" ||
-            !timestamp.trim()
-        ) {
-            return {
-                success: false,
-                message: "Invalid timestamp"
-            };
-        }
-
         const date = new Date(timestamp);
 
-        if (Number.isNaN(date.getTime())) {
+        if (
+            typeof timestamp !== "string" ||
+            !timestamp.trim() ||
+            Number.isNaN(date.getTime())
+        ) {
             return {
                 success: false,
                 message: "Invalid timestamp"
@@ -142,28 +119,14 @@ async function saveCoordinate(data) {
             .replace("T", " ");
     }
 
-
-    // Get the current MySQL connection pool.
-
     const pool = getPool();
 
-
-    // Insert coordinate into Azure MySQL.
-
-    const insertQuery = `
-        INSERT INTO coordinates
-        (
-            device_id,
-            latitude,
-            longitude,
-            altitude,
-            timestamp
-        )
-        VALUES (?, ?, ?, ?, ?)
-    `;
-
     const [result] = await pool.execute(
-        insertQuery,
+        `
+        INSERT INTO coordinates
+        (device_id, latitude, longitude, altitude, timestamp)
+        VALUES (?, ?, ?, ?, ?)
+        `,
         [
             device_id,
             latitude,
@@ -173,24 +136,10 @@ async function saveCoordinate(data) {
         ]
     );
 
-
-    // Retrieve the newly inserted record.
-
     const [rows] = await pool.execute(
-        `
-        SELECT
-            id,
-            device_id,
-            latitude,
-            longitude,
-            altitude,
-            timestamp
-        FROM coordinates
-        WHERE id = ?
-        `,
+        "SELECT * FROM coordinates WHERE id = ?",
         [result.insertId]
     );
-
 
     return {
         success: true,
@@ -225,10 +174,7 @@ const writeCoordinate = async (req, res) => {
 
     } catch (error) {
 
-        console.error(
-            "Coordinate insertion failed:",
-            error.message
-        );
+        console.error("Coordinate insertion failed:", error.message);
 
         return res.status(500).json({
             success: false,
@@ -239,42 +185,213 @@ const writeCoordinate = async (req, res) => {
 
 
 // =====================================================
-// READ ALL COORDINATES
+// FILTER AND PAGINATE COORDINATES
+// =====================================================
+
+async function fetchCoordinates(filters, routeDeviceId = null) {
+
+    const {
+        device_id,
+        date,
+        minLat,
+        maxLat,
+        page = "1",
+        limit = "10",
+        sort = "desc"
+    } = filters;
+
+    // Validate pagination
+
+    function parsePositiveInteger(value, max) {
+
+        const text = String(value);
+
+        if (!/^[1-9]\d*$/.test(text)) {
+            throw new Error("Invalid page or limit");
+        }
+
+        const number = Number(text);
+
+        if (!Number.isSafeInteger(number) || number > max) {
+            throw new Error("Invalid page or limit");
+        }
+
+        return number;
+    }
+
+    const pageNumber = parsePositiveInteger(page, 1000000);
+
+    const pageLimit = parsePositiveInteger(limit, 100);
+
+    const offset = (pageNumber - 1) * pageLimit;
+
+    if (!["asc", "desc"].includes(sort)) {
+        throw new Error("sort must be asc or desc");
+    }
+
+    // Build SQL filters
+
+    const conditions = [];
+    const params = [];
+
+    const selectedDevice = routeDeviceId || device_id;
+
+    if (selectedDevice !== undefined && selectedDevice !== null) {
+
+        if (
+            typeof selectedDevice !== "string" ||
+            !selectedDevice.trim() ||
+            selectedDevice.length > 100
+        ) {
+            throw new Error("Invalid device_id");
+        }
+
+        conditions.push("device_id = ?");
+        params.push(selectedDevice);
+    }
+
+    if (date !== undefined) {
+
+        if (
+            typeof date !== "string" ||
+            !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
+            Number.isNaN(Date.parse(date + "T00:00:00Z")) ||
+            new Date(date + "T00:00:00Z")
+                .toISOString()
+                .slice(0, 10) !== date
+        ) {
+            throw new Error("Date must be in YYYY-MM-DD format");
+        }
+
+        conditions.push("DATE(timestamp) = ?");
+        params.push(date);
+    }
+
+    if (minLat !== undefined) {
+
+        const value = Number(minLat);
+
+        if (
+            typeof minLat !== "string" ||
+            !minLat.trim() ||
+            !Number.isFinite(value) ||
+            value < -90 ||
+            value > 90
+        ) {
+            throw new Error("Invalid minLat");
+        }
+
+        conditions.push("latitude >= ?");
+        params.push(value);
+    }
+
+    if (maxLat !== undefined) {
+
+        const value = Number(maxLat);
+
+        if (
+            typeof maxLat !== "string" ||
+            !maxLat.trim() ||
+            !Number.isFinite(value) ||
+            value < -90 ||
+            value > 90
+        ) {
+            throw new Error("Invalid maxLat");
+        }
+
+        conditions.push("latitude <= ?");
+        params.push(value);
+    }
+
+    if (
+        minLat !== undefined &&
+        maxLat !== undefined &&
+        Number(minLat) > Number(maxLat)
+    ) {
+        throw new Error("minLat cannot be greater than maxLat");
+    }
+
+    const whereClause = conditions.length
+        ? "WHERE " + conditions.join(" AND ")
+        : "";
+
+    const direction = sort === "asc" ? "ASC" : "DESC";
+
+    const pool = getPool();
+
+    // Count matching records
+
+    const [countRows] = await pool.execute(
+        `SELECT COUNT(*) AS total FROM coordinates ${whereClause}`,
+        params
+    );
+
+    const total = countRows[0].total;
+
+    // Retrieve only the requested page
+
+    const [rows] = await pool.execute(
+        `
+        SELECT
+            id,
+            device_id,
+            latitude,
+            longitude,
+            altitude,
+            timestamp
+        FROM coordinates
+        ${whereClause}
+        ORDER BY timestamp ${direction}, id ${direction}
+        LIMIT ? OFFSET ?
+        `,
+        [...params, pageLimit, offset]
+    );
+
+    return {
+        total,
+        page: pageNumber,
+        limit: pageLimit,
+        totalPages: Math.ceil(total / pageLimit),
+        count: rows.length,
+        data: rows
+    };
+}
+
+
+// =====================================================
+// READ COORDINATES WITH FILTERS
 // =====================================================
 
 const getCoordinates = async (req, res) => {
 
     try {
 
-        const pool = getPool();
-
-        const [rows] = await pool.execute(
-            `
-            SELECT
-                id,
-                device_id,
-                latitude,
-                longitude,
-                altitude,
-                timestamp
-            FROM coordinates
-            ORDER BY id DESC
-            `
-        );
+        const result = await fetchCoordinates(req.query);
 
         return res.json({
             success: true,
             operation: "READ",
-            count: rows.length,
-            data: rows
+            ...result
         });
 
     } catch (error) {
 
         console.error(
-            "Failed to retrieve coordinates:",
+            "Coordinate retrieval failed:",
             error.message
         );
+
+        if (
+            error.message.startsWith("Invalid") ||
+            error.message.startsWith("Date must") ||
+            error.message.startsWith("sort must") ||
+            error.message.startsWith("minLat cannot")
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
 
         return res.status(500).json({
             success: false,
@@ -294,38 +411,36 @@ const getDeviceCoordinates = async (req, res) => {
 
         const deviceId = req.params.deviceId;
 
-        const pool = getPool();
-
-        const [rows] = await pool.execute(
-            `
-            SELECT
-                id,
-                device_id,
-                latitude,
-                longitude,
-                altitude,
-                timestamp
-            FROM coordinates
-            WHERE device_id = ?
-            ORDER BY id DESC
-            `,
-            [deviceId]
+        const result = await fetchCoordinates(
+            req.query,
+            deviceId
         );
 
         return res.json({
             success: true,
             operation: "READ",
             device_id: deviceId,
-            count: rows.length,
-            data: rows
+            ...result
         });
 
     } catch (error) {
 
         console.error(
-            "Failed to retrieve device coordinates:",
+            "Device coordinate retrieval failed:",
             error.message
         );
+
+        if (
+            error.message.startsWith("Invalid") ||
+            error.message.startsWith("Date must") ||
+            error.message.startsWith("sort must") ||
+            error.message.startsWith("minLat cannot")
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: error.message
+            });
+        }
 
         return res.status(500).json({
             success: false,
@@ -369,7 +484,7 @@ const evaluateCoordinate = (req, res) => {
 
 
 // =====================================================
-// EVALUATE AND WRITE COORDINATE
+// EVALUATE AND WRITE
 // =====================================================
 
 const processCoordinate = async (req, res) => {
@@ -413,7 +528,7 @@ const processCoordinate = async (req, res) => {
 
 
 // =====================================================
-// EXPORT CONTROLLER FUNCTIONS
+// EXPORTS
 // =====================================================
 
 module.exports = {
