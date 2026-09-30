@@ -1,16 +1,13 @@
 const result = document.getElementById("result");
 const checkHealthButton = document.getElementById("checkHealth");
 
-// Empty because frontend Nginx will proxy /health to the backend internally.
-const BACKEND_URL = "";
-
 checkHealthButton.addEventListener("click", async () => {
 
     result.textContent = "Checking backend...";
 
     try {
 
-        const response = await fetch(`${BACKEND_URL}/health`);
+        const response = await fetch("/backend-health");
 
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
