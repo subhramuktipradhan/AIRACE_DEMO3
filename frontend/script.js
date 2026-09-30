@@ -1,26 +1,60 @@
-const result = document.getElementById("result");
-const checkHealthButton = document.getElementById("checkHealth");
+const result =
+    document.getElementById("result");
 
-checkHealthButton.addEventListener("click", async () => {
+const checkHealthButton =
+    document.getElementById("checkHealth");
 
-    result.textContent = "Checking backend...";
 
-    try {
+checkHealthButton.addEventListener(
+    "click",
+    async () => {
 
-        const response = await fetch("/backend-health");
+        result.innerHTML = `
+            <span class="status-dot neutral"></span>
+            Checking AIRACE backend...
+        `;
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
+        checkHealthButton.disabled = true;
+
+        try {
+
+            const response =
+                await fetch("/backend-health");
+
+
+            if (!response.ok) {
+
+                throw new Error(
+                    `HTTP ${response.status}`
+                );
+            }
+
+
+            const data =
+                await response.json();
+
+
+            result.innerHTML = `
+                <span class="status-dot success"></span>
+
+                Backend Online —
+                ${data.service || "AIRACE API"}
+                (${data.status || "running"})
+            `;
+
+
+        } catch (error) {
+
+            result.innerHTML = `
+                <span class="status-dot error"></span>
+
+                Backend unavailable —
+                ${error.message}
+            `;
+
+        } finally {
+
+            checkHealthButton.disabled = false;
         }
-
-        const data = await response.json();
-
-        result.textContent =
-            `Backend is running: ${JSON.stringify(data)}`;
-
-    } catch (error) {
-
-        result.textContent =
-            `Backend connection failed: ${error.message}`;
     }
-});
+);

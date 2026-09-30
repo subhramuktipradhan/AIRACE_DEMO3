@@ -4,30 +4,302 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>AIRACE Demo</title>
+    <title>AIRACE | GNSS Staging Demo</title>
 
     <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
 
-    <div class="container">
+<header class="navbar">
 
-        <h1>AIRACE Demo Website</h1>
-
-        <p>Developer / Staging Environment</p>
-
-        <button id="checkHealth">
-            Check Backend Health
-        </button>
-
-        <div id="result">
-            Backend status will appear here.
-        </div>
-
+    <div class="logo">
+        AIRACE
     </div>
 
-    <script src="script.js"></script>
+    <nav>
+        <a href="#home">Home</a>
+        <a href="#technology">Technology</a>
+        <a href="#platform">Platform</a>
+        <a href="#status">System Status</a>
+    </nav>
+
+    <span class="environment-badge">
+        STAGING
+    </span>
+
+</header>
+
+
+<main>
+
+    <!-- HERO SECTION -->
+
+    <section class="hero" id="home">
+
+        <div class="hero-content">
+
+            <span class="eyebrow">
+                MADE IN INDIA
+            </span>
+
+            <h1>
+                Precision GNSS
+                <br>
+                Built for the Field.
+            </h1>
+
+            <p>
+                A staging environment for AIRACE GNSS services,
+                cloud connectivity and high-precision positioning.
+            </p>
+
+            <div class="hero-buttons">
+
+                <a
+                    href="#status"
+                    class="primary-button"
+                >
+                    Check System
+                </a>
+
+                <a
+                    href="#technology"
+                    class="secondary-button"
+                >
+                    Explore Technology
+                </a>
+
+            </div>
+
+        </div>
+
+
+        <div class="hero-visual">
+
+            <div class="receiver-card">
+
+                <div class="signal-icon">
+                    ◎
+                </div>
+
+                <h2>
+                    AIRACE GNSS
+                </h2>
+
+                <p>
+                    RTK Positioning Platform
+                </p>
+
+                <div class="receiver-status">
+
+                    <span></span>
+
+                    System Ready
+
+                </div>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- TECHNOLOGY -->
+
+    <section
+        class="section"
+        id="technology"
+    >
+
+        <p class="section-label">
+            GNSS TECHNOLOGY
+        </p>
+
+        <h2>
+            Precision from field to cloud.
+        </h2>
+
+        <div class="cards">
+
+            <div class="feature-card">
+
+                <span class="card-number">
+                    01
+                </span>
+
+                <h3>
+                    RTK Positioning
+                </h3>
+
+                <p>
+                    High-precision GNSS positioning designed for
+                    surveying, mapping and infrastructure workflows.
+                </p>
+
+            </div>
+
+
+            <div class="feature-card">
+
+                <span class="card-number">
+                    02
+                </span>
+
+                <h3>
+                    Multi-Constellation
+                </h3>
+
+                <p>
+                    Designed around modern GNSS workflows using
+                    multiple satellite constellations.
+                </p>
+
+            </div>
+
+
+            <div class="feature-card">
+
+                <span class="card-number">
+                    03
+                </span>
+
+                <h3>
+                    Cloud Connected
+                </h3>
+
+                <p>
+                    Containerized backend services deployed through
+                    Jenkins, Docker and Kubernetes.
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- PLATFORM -->
+
+    <section
+        class="platform-section"
+        id="platform"
+    >
+
+        <div>
+
+            <p class="section-label">
+                AIRACE PLATFORM
+            </p>
+
+            <h2>
+                One connected environment.
+            </h2>
+
+            <p>
+                This developer environment demonstrates the
+                AIRACE backend running inside Azure Kubernetes
+                Service with independent frontend and backend
+                workloads.
+            </p>
+
+        </div>
+
+
+        <div class="platform-flow">
+
+            <div>
+                GitHub
+            </div>
+
+            <span>→</span>
+
+            <div>
+                Jenkins
+            </div>
+
+            <span>→</span>
+
+            <div>
+                Docker
+            </div>
+
+            <span>→</span>
+
+            <div>
+                AKS
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- BACKEND STATUS -->
+
+    <section
+        class="status-section"
+        id="status"
+    >
+
+        <div class="status-content">
+
+            <p class="section-label">
+                LIVE SYSTEM STATUS
+            </p>
+
+            <h2>
+                Developer Environment
+            </h2>
+
+            <p>
+                Verify communication between the frontend,
+                Kubernetes Service and AIRACE backend.
+            </p>
+
+            <button id="checkHealth">
+                Check Backend Health
+            </button>
+
+
+            <div
+                id="result"
+                class="result"
+            >
+
+                <span class="status-dot neutral"></span>
+
+                Backend status has not been checked.
+
+            </div>
+
+        </div>
+
+    </section>
+
+</main>
+
+
+<footer>
+
+    <div class="footer-logo">
+        AIRACE
+    </div>
+
+    <p>
+        Precision GNSS systems for geospatial professionals.
+    </p>
+
+    <p class="copyright">
+        AIRACE Developer / Staging Environment
+    </p>
+
+</footer>
+
+
+<script src="script.js"></script>
 
 </body>
 </html>
