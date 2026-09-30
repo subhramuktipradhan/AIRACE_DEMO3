@@ -1,7 +1,8 @@
 const result = document.getElementById("result");
 const checkHealthButton = document.getElementById("checkHealth");
 
-const BACKEND_URL = "http://135.234.186.23";
+// Empty because frontend Nginx will proxy /health to the backend internally.
+const BACKEND_URL = "";
 
 checkHealthButton.addEventListener("click", async () => {
 
