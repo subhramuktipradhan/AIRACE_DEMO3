@@ -6,7 +6,8 @@ pipeline {
         RESOURCE_GROUP = 'gnss-demo-rg'
         AKS_NAME = 'airace-cluster'
 
-        DOCKER_IMAGE = 'subhramukti/subhramukti-airacedemo-azure:dev'
+        BACKEND_IMAGE = 'subhramukti/subhramukti-airacedemo-azure:dev'
+        FRONTEND_IMAGE = 'subhramukti/airace-frontend:dev'
     }
 
     stages {
@@ -17,31 +18,35 @@ pipeline {
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Install Backend Dependencies') {
             steps {
                 sh 'npm install'
             }
         }
 
-        stage('Test') {
+        stage('Test Backend') {
             steps {
                 sh 'npm test --if-present'
             }
         }
 
-        stage('Build Application') {
+        stage('Build Backend Application') {
             steps {
                 sh 'npm run build --if-present'
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build Backend Docker Image') {
             steps {
-                sh 'docker build -t $DOCKER_IMAGE .'
+                sh '''
+                    docker build \
+                      -t "$BACKEND_IMAGE" \
+                      .
+                '''
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Push Backend Docker Image') {
             steps {
                 withCredentials([
                     usernamePassword(
@@ -50,13 +55,44 @@ pipeline {
                         passwordVariable: 'DOCKER_PASSWORD'
                     )
                 ]) {
-
                     sh '''
                         echo "$DOCKER_PASSWORD" | docker login \
                           -u "$DOCKER_USERNAME" \
                           --password-stdin
 
-                        docker push "$DOCKER_IMAGE"
+                        docker push "$BACKEND_IMAGE"
+
+                        docker logout
+                    '''
+                }
+            }
+        }
+
+        stage('Build Frontend Docker Image') {
+            steps {
+                sh '''
+                    docker build \
+                      -t "$FRONTEND_IMAGE" \
+                      ./frontend
+                '''
+            }
+        }
+
+        stage('Push Frontend Docker Image') {
+            steps {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'dockerhub-credentials',
+                        usernameVariable: 'DOCKER_USERNAME',
+                        passwordVariable: 'DOCKER_PASSWORD'
+                    )
+                ]) {
+                    sh '''
+                        echo "$DOCKER_PASSWORD" | docker login \
+                          -u "$DOCKER_USERNAME" \
+                          --password-stdin
+
+                        docker push "$FRONTEND_IMAGE"
 
                         docker logout
                     '''
@@ -66,7 +102,7 @@ pipeline {
 
 
         // =====================================================
-        // DEPLOY DEVELOPER/STAGING TO AKS
+        // DEPLOY DEVELOPER / STAGING TO AKS
         // =====================================================
 
         stage('Azure Login and Deploy Developer to AKS') {
@@ -113,38 +149,50 @@ pipeline {
 
 
                         # Existing ServiceAccount
-                        kubectl apply -f k8s/serviceaccount.yaml
+                        kubectl apply \
+                          -f k8s/serviceaccount.yaml
 
 
-                        # Developer Headless Service
+                        # -------------------------
+                        # BACKEND
+                        # -------------------------
+
                         kubectl apply \
                           -f k8s/staging/headless-service.yaml
 
-
-                        # Developer Deployment
                         kubectl apply \
                           -f k8s/staging/deployment.yaml
 
-
-                        # Restart only developer Pods
                         kubectl rollout restart \
                           deployment/airace-dev
 
-
-                        # Wait for developer deployment
                         kubectl rollout status \
                           deployment/airace-dev \
                           --timeout=180s
 
-
-                        # Developer LoadBalancer Service
                         kubectl apply \
                           -f k8s/staging/service.yaml
 
-
-                        # Developer HPA
                         kubectl apply \
                           -f k8s/staging/hpa.yaml
+
+
+                        # -------------------------
+                        # FRONTEND
+                        # -------------------------
+
+                        kubectl apply \
+                          -f k8s/staging/frontend-deployment.yaml
+
+                        kubectl rollout restart \
+                          deployment/airace-frontend-dev
+
+                        kubectl rollout status \
+                          deployment/airace-frontend-dev \
+                          --timeout=180s
+
+                        kubectl apply \
+                          -f k8s/staging/frontend-service.yaml
                     '''
                 }
             }
@@ -160,17 +208,31 @@ pipeline {
 
                 sh '''
 
+                    echo "===== PODS ====="
                     kubectl get pods
 
+                    echo "===== SERVICES ====="
                     kubectl get services
 
+                    echo "===== HPA ====="
                     kubectl get hpa
 
+                    echo "===== BACKEND ENDPOINTS ====="
                     kubectl get endpoints \
                       airace-dev-service
 
+                    echo "===== FRONTEND ENDPOINTS ====="
+                    kubectl get endpoints \
+                      airace-frontend-dev-service
+
+                    echo "===== BACKEND LOGS ====="
                     kubectl logs \
                       deployment/airace-dev \
+                      --tail=50
+
+                    echo "===== FRONTEND LOGS ====="
+                    kubectl logs \
+                      deployment/airace-frontend-dev \
                       --tail=50
                 '''
             }
@@ -186,7 +248,7 @@ pipeline {
 
         success {
 
-            echo 'Developer pipeline completed successfully.'
+            echo 'Developer frontend and backend pipeline completed successfully.'
 
         }
 
