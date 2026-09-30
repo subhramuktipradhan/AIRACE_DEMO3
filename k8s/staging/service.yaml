@@ -5,7 +5,7 @@ metadata:
   name: airace-dev-service
 
 spec:
-  type: LoadBalancer
+  type: ClusterIP
 
   selector:
     app: airace-dev
