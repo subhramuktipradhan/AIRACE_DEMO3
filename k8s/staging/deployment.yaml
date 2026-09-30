@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: airace-dev
+
+spec:
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: airace-dev
+
+  template:
+    metadata:
+      labels:
+        app: airace-dev
+        azure.workload.identity/use: "true"
+
+    spec:
+      serviceAccountName: airace-demo-sa
+
+      containers:
+        - name: airace-dev
+
+          image: subhramukti/subhramukti-airacedemo-azure:dev
+
+          imagePullPolicy: Always
+
+          ports:
+            - containerPort: 3000
+
+          env:
+            - name: HEADLESS_SERVICE_NAME
+              value: "airace-dev-headless.default.svc.cluster.local"
+
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+
+            limits:
+              cpu: "500m"
+              memory: "512Mi"

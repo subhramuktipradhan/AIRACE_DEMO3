@@ -1,4 +1,3 @@
-
 const crypto = require("node:crypto");
 const dns = require("node:dns").promises;
 
@@ -13,7 +12,10 @@ const {
 // CONFIGURATION
 // =====================================================
 
+// Production uses the default headless service.
+// Developer/staging can override this value from deployment.yaml.
 const HEADLESS_SERVICE =
+    process.env.HEADLESS_SERVICE_NAME ||
     "airace-demo-headless.default.svc.cluster.local";
 
 const POD_PORT = 3000;
@@ -118,6 +120,7 @@ async function verifyRefreshRequest(req) {
         throw new Error("Invalid refresh request");
     }
 
+
     // Reject old notifications
     if (
         Math.abs(Date.now() - Number(timestamp)) >
@@ -126,23 +129,28 @@ async function verifyRefreshRequest(req) {
         throw new Error("Refresh notification expired");
     }
 
+
     // Retrieve the authentication token from Key Vault
     const refreshToken = await getSecret(
         "airace-refresh-token"
     );
 
+
     const message =
         `${timestamp}\n${eventId}\n${secretName}`;
+
 
     const expectedSignature = crypto
         .createHmac("sha256", refreshToken)
         .update(message)
         .digest();
 
+
     const receivedSignature = Buffer.from(
         signature,
         "hex"
     );
+
 
     if (
         !crypto.timingSafeEqual(
@@ -152,6 +160,7 @@ async function verifyRefreshRequest(req) {
     ) {
         throw new Error("Invalid refresh signature");
     }
+
 
     return {
         secretName,
@@ -174,9 +183,14 @@ async function handleRefreshApply(req, res) {
 
     let notification;
 
+
     try {
-        notification = await verifyRefreshRequest(req);
+
+        notification =
+            await verifyRefreshRequest(req);
+
     } catch (error) {
+
         console.error(
             "Refresh authentication failed:",
             error.message
@@ -188,22 +202,31 @@ async function handleRefreshApply(req, res) {
         });
     }
 
-    const { secretName, eventId } = notification;
+
+    const {
+        secretName,
+        eventId
+    } = notification;
+
 
     if (!handlers.has(secretName)) {
+
         return res.status(422).json({
             success: false,
             message: "No refresh handler registered"
         });
     }
 
+
     // Avoid processing the same event twice
     if (completedEvents.has(eventId)) {
+
         return res.json({
             success: true,
             message: "Event already processed"
         });
     }
+
 
     try {
 
@@ -218,14 +241,21 @@ async function handleRefreshApply(req, res) {
             );
         }
 
+
         await processingEvents.get(eventId);
 
-        completedEvents.set(eventId, Date.now());
+
+        completedEvents.set(
+            eventId,
+            Date.now()
+        );
+
 
         return res.json({
             success: true,
             message: "Secret refreshed successfully"
         });
+
 
     } catch (error) {
 
@@ -234,18 +264,29 @@ async function handleRefreshApply(req, res) {
             error.message
         );
 
+
         return res.status(503).json({
             success: false,
             message: "Secret refresh failed"
         });
 
+
     } finally {
 
         processingEvents.delete(eventId);
 
+
         // Remove old event records
-        for (const [id, completedAt] of completedEvents) {
-            if (Date.now() - completedAt > MAX_REQUEST_AGE) {
+        for (
+            const [id, completedAt]
+            of completedEvents
+        ) {
+
+            if (
+                Date.now() - completedAt >
+                MAX_REQUEST_AGE
+            ) {
+
                 completedEvents.delete(id);
             }
         }
@@ -261,8 +302,12 @@ async function handleRefreshIngress(req, res) {
 
     let notification;
 
+
     try {
-        notification = await verifyRefreshRequest(req);
+
+        notification =
+            await verifyRefreshRequest(req);
+
     } catch (error) {
 
         return res.status(401).json({
@@ -271,68 +316,102 @@ async function handleRefreshIngress(req, res) {
         });
     }
 
-    if (!handlers.has(notification.secretName)) {
+
+    if (
+        !handlers.has(
+            notification.secretName
+        )
+    ) {
+
         return res.status(422).json({
             success: false,
             message: "No refresh handler registered"
         });
     }
 
+
     try {
 
         // Discover all ready application Pods
-        const podAddresses = await dns.resolve4(
-            HEADLESS_SERVICE
-        );
+        // using the environment-specific Headless Service.
+        const podAddresses =
+            await dns.resolve4(
+                HEADLESS_SERVICE
+            );
 
-        if (podAddresses.length === 0) {
-            throw new Error("No ready application Pods found");
+
+        if (
+            podAddresses.length === 0
+        ) {
+
+            throw new Error(
+                "No ready application Pods found"
+            );
         }
 
+
         const body = JSON.stringify({
-            secretName: notification.secretName
+            secretName:
+                notification.secretName
         });
 
-        // Send the notification to every discovered Pod
-        const results = await Promise.allSettled(
 
-            podAddresses.map(async (podIP) => {
+        // Send the notification
+        // to every discovered Pod
+        const results =
+            await Promise.allSettled(
 
-                const response = await fetch(
-                    `http://${podIP}:${POD_PORT}/api/internal/secret-refresh/apply`,
-                    {
-                        method: "POST",
+                podAddresses.map(
+                    async (podIP) => {
 
-                        headers: {
-                            "Content-Type": "application/json",
+                        const response =
+                            await fetch(
 
-                            "x-airace-timestamp":
-                                notification.timestamp,
+                                `http://${podIP}:${POD_PORT}/api/internal/secret-refresh/apply`,
 
-                            "x-airace-event-id":
-                                notification.eventId,
+                                {
+                                    method: "POST",
 
-                            "x-airace-signature":
-                                notification.signature
-                        },
+                                    headers: {
+                                        "Content-Type":
+                                            "application/json",
 
-                        body,
+                                        "x-airace-timestamp":
+                                            notification.timestamp,
 
-                        signal: AbortSignal.timeout(15000)
+                                        "x-airace-event-id":
+                                            notification.eventId,
+
+                                        "x-airace-signature":
+                                            notification.signature
+                                    },
+
+                                    body,
+
+                                    signal:
+                                        AbortSignal.timeout(
+                                            15000
+                                        )
+                                }
+                            );
+
+
+                        if (!response.ok) {
+
+                            throw new Error(
+                                `Pod refresh returned HTTP ${response.status}`
+                            );
+                        }
                     }
-                );
+                )
+            );
 
-                if (!response.ok) {
-                    throw new Error(
-                        `Pod refresh returned HTTP ${response.status}`
-                    );
-                }
-            })
-        );
 
         const failed = results.filter(
-            result => result.status === "rejected"
+            result =>
+                result.status === "rejected"
         );
+
 
         if (failed.length > 0) {
 
@@ -340,17 +419,23 @@ async function handleRefreshIngress(req, res) {
                 `${failed.length} Pod refresh requests failed`
             );
 
+
             return res.status(503).json({
                 success: false,
-                message: "Some Pods failed to refresh"
+                message:
+                    "Some Pods failed to refresh"
             });
         }
 
+
         return res.json({
             success: true,
-            message: "Refresh completed on all discovered Pods",
-            podCount: podAddresses.length
+            message:
+                "Refresh completed on all discovered Pods",
+            podCount:
+                podAddresses.length
         });
+
 
     } catch (error) {
 
@@ -359,9 +444,11 @@ async function handleRefreshIngress(req, res) {
             error.message
         );
 
+
         return res.status(503).json({
             success: false,
-            message: "Unable to notify application Pods"
+            message:
+                "Unable to notify application Pods"
         });
     }
 }

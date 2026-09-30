@@ -1,4 +1,3 @@
-
 pipeline {
     agent any
 
@@ -6,6 +5,8 @@ pipeline {
         AZURE_SUBSCRIPTION_ID = '59260725-a3d3-4d63-aaf7-4c2c97fce963'
         RESOURCE_GROUP = 'gnss-demo-rg'
         AKS_NAME = 'airace-cluster'
+
+        DOCKER_IMAGE = 'subhramukti/subhramukti-airacedemo-azure:dev'
     }
 
     stages {
@@ -36,7 +37,7 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                sh 'docker build -t subhramukti/subhramukti-airacedemo-azure:latest .'
+                sh 'docker build -t $DOCKER_IMAGE .'
             }
         }
 
@@ -55,7 +56,7 @@ pipeline {
                           -u "$DOCKER_USERNAME" \
                           --password-stdin
 
-                        docker push subhramukti/subhramukti-airacedemo-azure:latest
+                        docker push "$DOCKER_IMAGE"
 
                         docker logout
                     '''
@@ -65,36 +66,44 @@ pipeline {
 
 
         // =====================================================
-        // DEPLOYMENT TO AKS
+        // DEPLOY DEVELOPER/STAGING TO AKS
         // =====================================================
 
-        stage('Azure Login and Deploy to AKS') {
+        stage('Azure Login and Deploy Developer to AKS') {
             steps {
+
                 withCredentials([
+
                     string(
                         credentialsId: 'AZURE_CLIENT_ID',
                         variable: 'AZURE_CLIENT_ID'
                     ),
+
                     string(
                         credentialsId: 'AZURE_CLIENT_SECRET',
                         variable: 'AZURE_CLIENT_SECRET'
                     ),
+
                     string(
                         credentialsId: 'AZURE_TENANT_ID',
                         variable: 'AZURE_TENANT_ID'
                     )
+
                 ]) {
 
                     sh '''
+
                         # Login to Azure
                         az login --service-principal \
                           --username "$AZURE_CLIENT_ID" \
                           --password "$AZURE_CLIENT_SECRET" \
                           --tenant "$AZURE_TENANT_ID"
 
-                        # Select Azure subscription
+
+                        # Select subscription
                         az account set \
                           --subscription "$AZURE_SUBSCRIPTION_ID"
+
 
                         # Connect kubectl to AKS
                         az aks get-credentials \
@@ -102,25 +111,40 @@ pipeline {
                           --name "$AKS_NAME" \
                           --overwrite-existing
 
-                        # Create/update Kubernetes ServiceAccount
+
+                        # Existing ServiceAccount
                         kubectl apply -f k8s/serviceaccount.yaml
 
-                        kubectl apply -f k8s/headless-service.yaml
 
-                        # Deploy application to AKS
-                        kubectl apply -f k8s/deployment.yaml
+                        # Developer Headless Service
+                        kubectl apply \
+                          -f k8s/staging/headless-service.yaml
 
-                        # Restart Pods to pull the latest image
-                        kubectl rollout restart deployment/airace-demo
 
-                        # Wait for deployment to complete
-                        kubectl rollout status deployment/airace-demo --timeout=180s
+                        # Developer Deployment
+                        kubectl apply \
+                          -f k8s/staging/deployment.yaml
 
-                        # Create/update Kubernetes Service
-                        kubectl apply -f k8s/service.yaml
 
-                        # Create/update Horizontal Pod Autoscaler
-                        kubectl apply -f k8s/hpa.yaml
+                        # Restart only developer Pods
+                        kubectl rollout restart \
+                          deployment/airace-dev
+
+
+                        # Wait for developer deployment
+                        kubectl rollout status \
+                          deployment/airace-dev \
+                          --timeout=180s
+
+
+                        # Developer LoadBalancer Service
+                        kubectl apply \
+                          -f k8s/staging/service.yaml
+
+
+                        # Developer HPA
+                        kubectl apply \
+                          -f k8s/staging/hpa.yaml
                     '''
                 }
             }
@@ -128,17 +152,26 @@ pipeline {
 
 
         // =====================================================
-        // VERIFY AKS DEPLOYMENT
+        // VERIFY DEVELOPER DEPLOYMENT
         // =====================================================
 
-        stage('Verify AKS Deployment') {
+        stage('Verify Developer Deployment') {
             steps {
+
                 sh '''
+
                     kubectl get pods
+
                     kubectl get services
+
                     kubectl get hpa
-                    kubectl get endpoints airace-demo-service
-                    kubectl logs deployment/airace-demo --tail=50
+
+                    kubectl get endpoints \
+                      airace-dev-service
+
+                    kubectl logs \
+                      deployment/airace-dev \
+                      --tail=50
                 '''
             }
         }
@@ -152,19 +185,23 @@ pipeline {
     post {
 
         success {
-            echo 'Pipeline completed successfully. Application deployed to AKS.'
+
+            echo 'Developer pipeline completed successfully.'
+
         }
 
         failure {
-            echo 'Pipeline failed. Sending email notification.'
+
+            echo 'Developer pipeline failed. Sending email notification.'
 
             emailext(
+
                 to: 'subhramuktipradhan@gmail.com',
 
-                subject: "Jenkins Pipeline FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                subject: "Jenkins Developer Pipeline FAILED: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
 
                 body: """
-AIRACE_DEMO3 Jenkins Pipeline Failed.
+AIRACE Developer Jenkins Pipeline Failed.
 
 Job Name: ${env.JOB_NAME}
 
@@ -174,14 +211,13 @@ Build Status: ${currentBuild.currentResult}
 
 Build URL: ${env.BUILD_URL}
 
-Please check the Jenkins console output
-to identify the cause of the failure.
+Please check the Jenkins console output.
 """
             )
         }
 
         always {
-            echo 'Pipeline execution completed.'
+            echo 'Developer pipeline execution completed.'
         }
     }
 }

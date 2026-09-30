@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+
+metadata:
+  name: airace-dev-headless
+
+spec:
+  clusterIP: None
+
+  selector:
+    app: airace-dev
+
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000
